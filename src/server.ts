@@ -2,12 +2,13 @@ import express, { type Application, type Request, type Response } from "express"
 const app: Application = express()
 const port = 3000
 import {Pool} from "pg"
+import config from "./config";
 
 app.use(express.json())
 app.use(express.text())
 
 const pool = new Pool({
-    connectionString: "postgresql://neondb_owner:npg_W3l0JpgxrUhV@ep-rapid-surf-aod9rzsd.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=false&channel_binding=require"
+    connectionString: config.connecting_String
 })
 // console.log(pool)
 
@@ -101,12 +102,19 @@ app.get('/api/:id', async (req: Request, res: Response) => {
             SELECT * FROM users WHERE id=$1
             `,
         [id])
+
+        if (result.rowCount === 0) {
+      res.status(404).json({
+        success: false,
+        message: "User not found!!",
+      });
+    }
         
             // console.log(result)
         res.status(201).json({
             success: true,
             message: "User REtrived Successfully",
-            data: result.rows,
+            data: result.rows[0],
         })
 
     } catch (error: any) {
@@ -118,6 +126,80 @@ app.get('/api/:id', async (req: Request, res: Response) => {
     }
 })
 
-app.listen(port, () => {
+app.put('/api/:id', async (req: Request, res: Response) => {
+    try {
+
+        const {id} = req.params
+        const {name,password,age,is_Active} = req.body
+
+        const result = await pool.query(`
+            UPDATE users
+            SET
+            name = COALESCE($1, name),
+            password = COALESCE($2, password),
+            age = COALESCE($3, age),
+            is_Active = COALESCE($4, is_Active),
+            updated_At = NOW()
+            WHERE id=$5 RETURNING *
+            `,
+        [name??null, password??null, age??null, is_Active??null, id]
+    )
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        success: false,
+        message: "User not found!!",
+      });
+    }
+
+        res.status(201).json({
+            success: true,
+            message: "User Updated Successfully",
+            data: result.rows[0],
+        })
+        
+    } catch (error: any) {
+        res.status(500).json({
+        success: false,
+        message: error?.message,
+        data: error,
+    })
+    }
+})
+
+app.delete('/api/:id', async (req: Request, res: Response) => {
+    try {
+
+        const {id} = req.params
+
+        const result = await pool.query(`
+            DELETE FROM users WHERE id=$1
+            `,
+        [id]
+    )
+
+    if (result.rowCount === 0) {
+      res.status(404).json({
+        success: false,
+        message: "User not found!!",
+      });
+    }
+
+        res.status(201).json({
+            success: true,
+            message: "User Deleted Successfully",
+            data: result.rows[0],
+        })
+        
+    } catch (error: any) {
+        res.status(500).json({
+        success: false,
+        message: error?.message,
+        data: error,
+    })
+    }
+})
+
+app.listen(config.port, () => {
   console.log(`Server is running ${port}`)
 })
